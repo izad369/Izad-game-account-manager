@@ -1,0 +1,14 @@
+{
+  "name": "game-account-manager",
+  "version": "1.0.0",
+  "description": "Central game account manager: one account for all your games (sign up once, play everywhere)",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^4.141.0"
+  }
+}

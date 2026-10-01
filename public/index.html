@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Account Manager</title>
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --accent:#22c55e; --text:#e2e8f0; --muted:#94a3b8; --red:#ef4444; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .wrap { max-width:460px; margin:50px auto; padding:28px; background:var(--panel); border-radius:16px; text-align:center; }
+  h1 { color:var(--accent); margin-bottom:6px; }
+  p.sub { color:var(--muted); margin-bottom:22px; font-size:.95rem; }
+  input { width:100%; padding:12px 14px; border-radius:9px; border:1px solid #334155; background:#0f172a; color:var(--text); font-size:1rem; margin-bottom:10px; }
+  button { width:100%; padding:12px; border:none; border-radius:9px; background:var(--accent); color:#052e16; font-weight:700; font-size:1rem; cursor:pointer; margin-bottom:8px; }
+  button.ghost { background:#334155; color:var(--text); }
+  .msg { min-height:1.3em; font-size:.9rem; margin-bottom:10px; }
+  .msg.err { color:var(--red); }
+  .msg.ok { color:var(--accent); }
+  .hidden { display:none !important; }
+  #accountBox .big { font-size:1.3rem; font-weight:800; margin:10px 0; }
+  #accountBox .meta { color:var(--muted); font-size:.85rem; margin-bottom:16px; }
+  .games { margin-top:18px; text-align:left; }
+  .games h3 { color:var(--muted); font-size:.85rem; text-transform:uppercase; margin-bottom:8px; }
+  .games a { display:block; padding:12px 14px; background:#0f172a; border:1px solid #334155; border-radius:10px; color:var(--text); text-decoration:none; margin-bottom:8px; font-size:.95rem; }
+  .games a span { color:var(--accent); font-weight:700; }
+  hr { border:none; border-top:1px solid #334155; margin:18px 0; }
+  .pw-form input { margin-bottom:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Auth view -->
+  <div id="authBox">
+    <h1>🎮 Game Account Manager</h1>
+    <p class="sub">One account for all your games. Sign up once, play everywhere.</p>
+    <input id="userInput" placeholder="Username" maxlength="20" autocomplete="username">
+    <input id="passInput" type="password" placeholder="Password" autocomplete="current-password">
+    <button id="loginBtn">Sign In</button>
+    <button id="signupBtn" class="ghost">Create Account</button>
+    <div class="msg" id="authMsg"></div>
+  </div>
+
+  <!-- Account view -->
+  <div id="accountBox" class="hidden">
+    <h1>🎮 Game Account</h1>
+    <div class="big" id="accName">—</div>
+    <div class="meta" id="accMeta"></div>
+    <button id="logoutBtn" class="ghost">Log Out</button>
+    <div class="msg" id="accMsg"></div>
+    <hr>
+    <div class="pw-form">
+      <h3 style="color:var(--muted);font-size:.85rem;margin-bottom:8px">Change password</h3>
+      <input id="oldPass" type="password" placeholder="Current password">
+      <input id="newPass" type="password" placeholder="New password">
+      <button id="pwBtn" class="ghost">Update Password</button>
+    </div>
+    <hr>
+    <div class="games">
+      <h3>Your games</h3>
+      <a href="https://online-hokm.rezaei-reza1092.workers.dev/" target="_blank">♠ <span>Court Piece</span> — online multiplayer card game</a>
+      <a href="https://neon-slither.rezaei-reza1092.workers.dev/" target="_blank">🐍 <span>Neon Slither</span> — online snake arena</a>
+    </div>
+  </div>
+
+</div>
+<script>
+(function () {
+  'use strict';
+  var API = location.origin + '/api';
+  var userInput = document.getElementById('userInput');
+  var passInput = document.getElementById('passInput');
+  var authMsg = document.getElementById('authMsg');
+  var accMsg = document.getElementById('accMsg');
+
+  function setMsg(el, text, ok) {
+    el.textContent = text;
+    el.className = 'msg ' + (ok ? 'ok' : 'err');
+  }
+
+  async function api(path, body) {
+    const r = await fetch(API + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    });
+    const data = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(data.error || 'Request failed.');
+    return data;
+  }
+
+  function saveSession(d) {
+    try {
+      localStorage.setItem('gam_token', d.token);
+      localStorage.setItem('gam_username', d.username);
+    } catch (e) {}
+  }
+
+  function showAccount(username, createdAt) {
+    document.getElementById('authBox').classList.add('hidden');
+    document.getElementById('accountBox').classList.remove('hidden');
+    document.getElementById('accName').textContent = username;
+    document.getElementById('accMeta').textContent = 'Member since ' + (createdAt ? new Date(createdAt).toLocaleDateString() : '—');
+  }
+
+  // Auto-login if we have a saved token
+  (async function () {
+    var token = null;
+    try { token = localStorage.getItem('gam_token'); } catch (e) {}
+    if (!token) return;
+    try {
+      const r = await fetch(API + '/me?token=' + encodeURIComponent(token));
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      saveSession(d);
+      showAccount(d.username, d.createdAt);
+    } catch (e) {
+      try { localStorage.removeItem('gam_token'); } catch (e2) {}
+    }
+  })();
+
+  document.getElementById('loginBtn').onclick = async function () {
+    setMsg(authMsg, 'Signing in…', true);
+    try {
+      const d = await api('/login', { username: userInput.value, password: passInput.value });
+      saveSession(d);
+      showAccount(d.username, d.createdAt);
+    } catch (e) { setMsg(authMsg, e.message, false); }
+  };
+
+  document.getElementById('signupBtn').onclick = async function () {
+    setMsg(authMsg, 'Creating account…', true);
+    try {
+      const d = await api('/signup', { username: userInput.value, password: passInput.value });
+      saveSession(d);
+      showAccount(d.username, d.createdAt);
+    } catch (e) { setMsg(authMsg, e.message, false); }
+  };
+
+  document.getElementById('logoutBtn').onclick = async function () {
+    var token = null;
+    try { token = localStorage.getItem('gam_token'); } catch (e) {}
+    if (token) { try { await api('/logout', { token: token }); } catch (e) {} }
+    try { localStorage.removeItem('gam_token'); localStorage.removeItem('gam_username'); } catch (e) {}
+    location.reload();
+  };
+
+  document.getElementById('pwBtn').onclick = async function () {
+    setMsg(accMsg, 'Updating…', true);
+    var token = null;
+    try { token = localStorage.getItem('gam_token'); } catch (e) {}
+    try {
+      await api('/change-password', { token: token, oldPassword: document.getElementById('oldPass').value, newPassword: document.getElementById('newPass').value });
+      setMsg(accMsg, 'Password updated ✓', true);
+      document.getElementById('oldPass').value = '';
+      document.getElementById('newPass').value = '';
+    } catch (e) { setMsg(accMsg, e.message, false); }
+  };
+
+  passInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('loginBtn').click(); });
+})();
+</script>
+</body>
+</html>
